@@ -20,6 +20,8 @@ TIMEZONE_OFFSET = 6
 YEAR_POS = 4
 DAY_POS = 2
 
+DAYS_IN_A_WEEK = 7
+
 
 def prepare_data(file_path: str):
     data = []
@@ -71,6 +73,10 @@ def get_price_data(data: list) -> dict:
     return result
 
 
+def get_dataframe(df_data: list):
+    return pd.DataFrame(df_data)
+
+
 def create_dataframe(value_data: list, label_data: list, value_label: str = VALUE_LABEL, label_label: str = LABEL_LABEL):
     num_values = len(value_data)
     num_labels = len(label_data)
@@ -86,7 +92,7 @@ def create_dataframe(value_data: list, label_data: list, value_label: str = VALU
 
 
 # --------------------------------------------------
-def get_avg_month_values(data, dates, year: str):
+def get_avg_month_values(data: list, dates: list, year: str):
     assert len(year) == YEAR_POS, f"[!] Invalid year: {year}"
 
     # format: yyyy-mm-dd
@@ -105,3 +111,12 @@ def get_avg_month_values(data, dates, year: str):
         month_avg = [np.mean(price) for price in month_results[PRICE_LABEL]]
         month_values.append(round(np.mean(month_avg), 4))
     return month_values
+
+
+def get_avg_hour_values(data: list, dates: list, day_indicies: list):
+    day_dates = [date for i, date in enumerate(dates) if i % DAYS_IN_A_WEEK in day_indicies]
+    day_data = get_filtered_data(data, day_dates)
+    day_results = get_price_data(day_data)
+
+    day_avg = [np.mean(price) for price in day_results[PRICE_LABEL]]
+    return {VALUE_LABEL: day_avg, LABEL_LABEL: day_results[LABEL_LABEL]}
