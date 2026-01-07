@@ -45,18 +45,18 @@ def _(alt, data, dates, file, gen, mo, month_label, price_label):
     year_points = alt.Chart(df_months).mark_point(size=200, filled=True).encode(x=alt.X(month_label, sort=None), y=price_label, tooltip=[price_label])
 
     mo.vstack([
-        mo.md("## Average monthly tariffs in 2025"),
+        mo.md(f"## Average monthly tariffs: {gen.show_date(dates[0])} - {gen.show_date(dates[-1])}"),
         year_line + year_points
     ])
     return
 
 
 @app.cell
-def _(gen, mo):
+def _(dates, gen, mo):
     day_selection = mo.ui.multiselect(options=gen.DAY_LABELS, value=gen.DAY_LABELS, label="Select days: ")
 
     mo.vstack([
-        mo.md("## Average hourly tariffs - Days"),
+        mo.md(f"## Average hourly tariffs: {gen.show_date(dates[0])} - {gen.show_date(dates[-1])}"),
         day_selection,
     ])
     return (day_selection,)
