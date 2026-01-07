@@ -26,7 +26,7 @@ def _(file):
 
 @app.cell
 def _():
-    price_label = "Avg price"
+    price_label = "Price"
     month_label = "Month"
     hour_label = "Hour"
     return hour_label, month_label, price_label
@@ -38,7 +38,7 @@ def _(alt, data, dates, file, gen, mo, month_label, price_label):
     month_values = file.get_avg_month_values(data, dates, "2025")
     month_labels = gen.MONTH_LABELS[0:len(month_values)]
 
-    df_months, _, _ = file.create_dataframe(month_values, month_labels, price_label, month_label)
+    df_months = file.dict_to_dataframe({price_label: month_values, month_label: month_labels})
 
     # altair: create line and point plot
     year_line = alt.Chart(df_months).mark_line().encode(x=alt.X(month_label, sort=None), y=price_label)
@@ -64,24 +64,15 @@ def _(gen, mo):
 
 @app.cell
 def _(alt, data, dates, day_selection, file, gen, hour_label, price_label):
-    day_results = []
+    day_results = {}
 
     for day in day_selection.value:
         day_indicies = [gen.get_index(gen.DAY_LABELS, day)]
         day_result = file.get_avg_hour_values(data, dates, day_indicies)
-        day_results.append(day_result)
+        day_results[day] = day_result["value"]
+        day_results[hour_label] = day_result["label"]
 
-    df_results = []
-    if len(day_results) != 0:
-        for v in range(len(day_results[0]["value"])):
-            result = {hour_label: day_results[0]["label"][v][:-4]}
-
-            for i, day in enumerate(day_results):
-                result[day_selection.value[i]] = day["value"][v].round(3)
-
-            df_results.append(result)
-
-    df_day = file.get_dataframe(df_results)
+    df_day = file.dict_to_dataframe(day_results)
 
     # create plots
     day_lines = alt.Chart(df_day).mark_line().transform_fold(
@@ -123,7 +114,27 @@ def _(dates, mo):
 
 
 @app.cell
-def _(alt, data, date_selection, dates, file, hour_label, price_label):
+def _(alt, data, date_selection, dates, file, gen, hour_label, price_label):
+    # create total avg line
+    total_avg_hourly = file.get_avg_hour_values(data, dates, [day_i  for day_i in range(len(gen.DAY_LABELS))])
+    total_avg_hourly[price_label] = total_avg_hourly["value"]
+    total_avg_hourly[hour_label] = total_avg_hourly["label"]
+
+    df_total_avg_hourly = file.dict_to_dataframe(total_avg_hourly)
+    total_avg_line = alt.Chart(df_total_avg_hourly).transform_calculate(
+            Legend="'Total average'",
+        ).mark_line(strokeDash=[4,4]).encode(
+            x=hour_label, 
+            y=price_label,
+            color = alt.Color("Legend:N",
+                scale=alt.Scale(
+                    range=["#e89c46"]
+                    )
+                )
+            )
+
+
+    # create hourly box plots
     date_min = str(date_selection.value[0])
     date_max = str(date_selection.value[1])
 
@@ -133,22 +144,25 @@ def _(alt, data, date_selection, dates, file, hour_label, price_label):
 
     range_box_plots = []
 
-    range_results[price_label] = range_results["price"]
-    range_results[hour_label] = range_results["label"]
-
-    for a in range(len(range_results[price_label])):
+    for a in range(len(range_results["price"])):
         df_selected_dates = file.get_dataframe({
-            price_label: range_results[price_label][a],
-            hour_label: range_results[hour_label][a][:-4]
+            price_label: range_results["price"][a],
+            hour_label: range_results["label"][a]
         })
+
         new_plot = alt.Chart(df_selected_dates).mark_boxplot(outliers=False).encode(
-            x=alt.X(hour_label, sorted=False), y=price_label
+            x=alt.X(hour_label, sorted=False),
+            y=price_label
         )
 
         range_box_plots.append(new_plot)
 
+    total_avg_line + alt.layer(*range_box_plots)
+    return
 
-    alt.layer(*range_box_plots)
+
+@app.cell
+def _():
     return
 
 

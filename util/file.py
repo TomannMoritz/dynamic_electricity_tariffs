@@ -73,26 +73,29 @@ def get_price_data(data: list) -> dict:
     return result
 
 
-def get_dataframe(df_data: list):
-    return pd.DataFrame(df_data)
+def dict_to_dataframe(data: dict):
+    keys = data.keys()
+    assert len(data) > 0, f"[!] Invalid dictionary: {data}"
+    assert all([type(data[key]) is list for key in keys]), f"[!] Invalid types!"
+
+    array_len = len(data[next(iter(keys))])
+    assert all([len(data[key]) == array_len for key in keys]), f"[!] Lengths does not match!"
+
+    result = []
+    for i in range(array_len):
+        row = {}
+        for key in keys:
+            row[key] = data[key][i]
+        result.append(row)
+    return pd.DataFrame(result)
 
 
-def create_dataframe(value_data: list, label_data: list, value_label: str = VALUE_LABEL, label_label: str = LABEL_LABEL):
-    num_values = len(value_data)
-    num_labels = len(label_data)
-    assert num_values == num_labels, f"[!] Invalid lengths: \nValues: {num_values}\nLabels: {num_labels}"
-
-    results = []
-    for value, label in zip(value_data, label_data):
-        results.append({
-            value_label: value,
-            label_label: label
-            })
-    return pd.DataFrame(results), value_label, label_label
+def get_dataframe(data: dict):
+    return pd.DataFrame(data)
 
 
 # --------------------------------------------------
-def get_avg_month_values(data: list, dates: list, year: str):
+def get_avg_month_values(data: list, dates: list, year: str) -> list:
     assert len(year) == YEAR_POS, f"[!] Invalid year: {year}"
 
     # format: yyyy-mm-dd
@@ -113,7 +116,7 @@ def get_avg_month_values(data: list, dates: list, year: str):
     return month_values
 
 
-def get_avg_hour_values(data: list, dates: list, day_indicies: list):
+def get_avg_hour_values(data: list, dates: list, day_indicies: list) -> dict:
     day_dates = [date for i, date in enumerate(dates) if i % DAYS_IN_A_WEEK in day_indicies]
     day_data = get_filtered_data(data, day_dates)
     day_results = get_price_data(day_data)
