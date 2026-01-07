@@ -25,13 +25,19 @@ def _(file):
 
 
 @app.cell
-def _(alt, data, dates, file, gen, mo):
+def _():
+    price_label = "Avg price"
+    month_label = "Month"
+    hour_label = "Hour"
+    return hour_label, month_label, price_label
+
+
+@app.cell
+def _(alt, data, dates, file, gen, mo, month_label, price_label):
     # year overview
     month_values = file.get_avg_month_values(data, dates, "2025")
     month_labels = gen.MONTH_LABELS[0:len(month_values)]
 
-    price_label = "Avg electricity tariffs in €"
-    month_label = "Months"
     df_months, _, _ = file.create_dataframe(month_values, month_labels, price_label, month_label)
 
     # altair: create line and point plot
@@ -48,11 +54,16 @@ def _(alt, data, dates, file, gen, mo):
 @app.cell
 def _(gen, mo):
     day_selection = mo.ui.multiselect(options=gen.DAY_LABELS, value=gen.DAY_LABELS, label="Select days: ")
+
+    mo.vstack([
+        mo.md("## Average hourly tariffs - Days"),
+        day_selection,
+    ])
     return (day_selection,)
 
 
 @app.cell
-def _(alt, data, dates, day_selection, file, gen, mo):
+def _(alt, data, dates, day_selection, file, gen, hour_label, price_label):
     day_results = []
 
     for day in day_selection.value:
@@ -63,45 +74,81 @@ def _(alt, data, dates, day_selection, file, gen, mo):
     df_results = []
     if len(day_results) != 0:
         for v in range(len(day_results[0]["value"])):
-            result = {"Hour": day_results[0]["label"][v][:-4]}
+            result = {hour_label: day_results[0]["label"][v][:-4]}
 
             for i, day in enumerate(day_results):
                 result[day_selection.value[i]] = day["value"][v].round(3)
 
             df_results.append(result)
 
-    day_df = file.get_dataframe(df_results)
+    df_day = file.get_dataframe(df_results)
 
     # create plots
-    day_lines = alt.Chart(day_df).mark_line().transform_fold(
+    day_lines = alt.Chart(df_day).mark_line().transform_fold(
         fold=day_selection.value,
-        as_=["Day", "Price"],
+        as_=["Day", price_label],
     ).encode(
-        x='Hour',
-        y='Price:Q',
+        x=f'{hour_label}',
+        y=f'{price_label}:Q',
         color=alt.Color('Day:N', sort=False)
     )
 
-    day_points = alt.Chart(day_df).mark_point().transform_fold(
+    day_points = alt.Chart(df_day).mark_point().transform_fold(
         fold=day_selection.value,
-        as_=["Day", "Price"]
+        as_=["Day", price_label]
     ).encode(
-        x='Hour',
-        y='Price:Q',
+        x=f'{hour_label}',
+        y=f'{price_label}:Q',
         color=alt.Color('Day:N', sort=False),
-        tooltip=["Day:N", "Price:Q"]
+        tooltip=["Day:N", f"{price_label}:Q", f"{hour_label}"]
     )
-
-    mo.vstack([
-        mo.md("## Average hourly tariffs"),
-        day_selection,
-    ])
     return day_lines, day_points
 
 
 @app.cell
 def _(alt, day_lines, day_points):
     alt.layer(day_lines, day_points)
+    return
+
+
+@app.cell
+def _(dates, mo):
+    date_selection = mo.ui.date_range(start=dates[0], stop=dates[-1])
+
+    mo.vstack([
+        mo.md("## Hourly tariffs - Date Range"),
+        date_selection,
+    ])
+    return (date_selection,)
+
+
+@app.cell
+def _(alt, data, date_selection, dates, file, hour_label, price_label):
+    date_min = str(date_selection.value[0])
+    date_max = str(date_selection.value[1])
+
+    range_dates = [date for date in dates if date >= date_min and date <= date_max]
+    range_data = file.get_filtered_data(data, range_dates)
+    range_results = file.get_price_data(range_data)
+
+    range_box_plots = []
+
+    range_results[price_label] = range_results["price"]
+    range_results[hour_label] = range_results["label"]
+
+    for a in range(len(range_results[price_label])):
+        df_selected_dates = file.get_dataframe({
+            price_label: range_results[price_label][a],
+            hour_label: range_results[hour_label][a][:-4]
+        })
+        new_plot = alt.Chart(df_selected_dates).mark_boxplot(outliers=False).encode(
+            x=alt.X(hour_label, sorted=False), y=price_label
+        )
+
+        range_box_plots.append(new_plot)
+
+
+    alt.layer(*range_box_plots)
     return
 
 
