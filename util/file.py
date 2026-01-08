@@ -1,27 +1,15 @@
 import json
 import pandas as pd
-import numpy as np
-
-import util.time as time
 
 DATE_LABEL = "date"
 TIME_LABEL = "time"
 TIME_ZONE_LABEL = "time_zone"
-DATA_VALUE_LABEL = "value"
-
-TIME_START_LABEL = "startsAt"
-TOTAL_PRICE_LABEL = "total"
-PRICE_LABEL = "price"
-
 VALUE_LABEL = "value"
-LABEL_LABEL = "label"
 
 TIMEZONE_OFFSET = 6
 
-DATE_SEPARATOR = '-'
-YEAR_POS = 4
-MONTH_POS = 2
-DAY_POS = 2
+TIME_START_LABEL = "startsAt"
+TOTAL_PRICE_LABEL = "total"
 
 DAYS_IN_A_WEEK = 7
 
@@ -34,7 +22,7 @@ def prepare_data(file_path: str):
         for row in f_in:
             json_row = json.loads(row)
             key = next(iter(json_row.keys()))
-            dates.append(key.replace("_", "-"))
+            dates.append(key)
 
             # collect energy prices for each day
             day_data = json_row[key]
@@ -46,34 +34,13 @@ def prepare_data(file_path: str):
                     DATE_LABEL: key,
                     TIME_LABEL: time_value[1:-TIMEZONE_OFFSET],
                     TIME_ZONE_LABEL: time_value[-TIMEZONE_OFFSET:],
-                    DATA_VALUE_LABEL: value,
+                    VALUE_LABEL: value,
                 })
     return data, dates
 
 
 def get_filtered_data(data: list, filtered_dates: list) -> list:
     return [row for row in data if row[DATE_LABEL] in filtered_dates]
-
-
-def get_price_data(data: list) -> dict:
-    price_data = [[] for _ in range(time.HOURS_IN_DAY * time.QUARTERS_IN_HOUR)]
-    price_labels = [time.index_to_str(i) for i in range(time.HOURS_IN_DAY * time.QUARTERS_IN_HOUR)]
-
-    for row in data:
-        time_value = row[TIME_LABEL]
-        index = time.str_to_index(time_value)
-
-        price_value = row[DATA_VALUE_LABEL]
-        price_data[index].append(price_value)
-
-    # filter empty rows
-    result = {PRICE_LABEL: [], LABEL_LABEL: []}
-    for price, label in zip(price_data, price_labels):
-        if price != []:
-            result[PRICE_LABEL].append(price)
-            result[LABEL_LABEL].append(label)
-
-    return result
 
 
 def dict_to_dataframe(data: dict):
