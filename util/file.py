@@ -64,6 +64,14 @@ def get_dataframe(data: dict):
     return pd.DataFrame(data)
 
 
+def clean_dataframe(df, value_label=VALUE_LABEL, time_label=TIME_LABEL, decimal_pos=3):
+    df[value_label] = df[value_label].round(decimal_pos)
+
+    # format: HH:MM
+    df[time_label] = df[time_label].apply(lambda x: str(x)[:5])
+    return df
+
+
 # --------------------------------------------------
 def get_date_range_data(data: list, dates: list, date_start: str, date_end: str) -> list:
     # format: yyyy-mm-dd

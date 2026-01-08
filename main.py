@@ -32,6 +32,8 @@ def _(dates, mo):
 
     YEAR_POS = 4
 
+    DECIMAL_POS = 2
+
     POINT_SIZE = 100
 
     # ui elements
@@ -45,6 +47,7 @@ def _(dates, mo):
         tab_box_plot_label: ""
     })
     return (
+        DECIMAL_POS,
         MONTH_LABEL,
         POINT_SIZE,
         PRICE_LABEL,
@@ -58,6 +61,7 @@ def _(dates, mo):
 
 @app.cell
 def _(
+    DECIMAL_POS,
     MONTH_LABEL,
     POINT_SIZE,
     PRICE_LABEL,
@@ -88,7 +92,7 @@ def _(
 
         date_start = gen.DATE_SPEARATOR.join([curr_year, month_str, MONTH_FIRST_DAY])
         date_end = gen.DATE_SPEARATOR.join([curr_year, month_str, MONTH_LAST_DAY])
-    
+
         month_value = file.get_date_range_data(data, dates, date_start, date_end)
 
         for m_value in month_value:
@@ -103,7 +107,8 @@ def _(
     if year_tab.value == tab_line_label:
         df_months = df_months.groupby([_M_LABEL, M_LABEL])[file.VALUE_LABEL].mean()
         df_months = df_months.reset_index()
-    
+        df_months = file.clean_dataframe(df_months, time_label=M_LABEL, decimal_pos=DECIMAL_POS)
+
          # average line
         year_line_plot = alt.Chart(df_months).mark_line().encode(
             x=alt.X(M_LABEL, sort=False, title=MONTH_LABEL),
@@ -128,6 +133,8 @@ def _(
 
     # box plot
     if year_tab.value == tab_box_plot_label:
+        df_months[file.VALUE_LABEL] = df_months[file.VALUE_LABEL].round(DECIMAL_POS)
+
         year_box_plot = alt.Chart(df_months).mark_boxplot(outliers=False).encode(
             x=alt.X(M_LABEL, sort=False, title=MONTH_LABEL),
             y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL)
@@ -162,6 +169,7 @@ def _(dates, gen, mo, tab_box_plot_label, tab_line_label):
 
 @app.cell
 def _(
+    DECIMAL_POS,
     POINT_SIZE,
     PRICE_LABEL,
     TIME_LABEL,
@@ -188,6 +196,7 @@ def _(
     if day_tabs.value == tab_line_label:
         df_day_data = df_day_data.groupby(["_day", "day", file.TIME_LABEL])[file.VALUE_LABEL].mean()
         df_day_data = df_day_data.reset_index()
+        df_day_data = file.clean_dataframe(df_day_data, decimal_pos=DECIMAL_POS)
 
         # create plots
         day_lines = alt.Chart(df_day_data).mark_line().encode(
@@ -203,8 +212,8 @@ def _(
             color=alt.Color('day:N', sort=False),
             tooltip=[
                 alt.Tooltip("day:N", title="Day"),
-                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL),
-                alt.Tooltip(file.TIME_LABEL, title=TIME_LABEL)
+                alt.Tooltip(file.TIME_LABEL, title=TIME_LABEL),
+                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL)
             ]
         )
 
@@ -212,10 +221,12 @@ def _(
 
     # box plot
     if day_tabs.value == tab_box_plot_label:
+        df_day_data = file.clean_dataframe(df_day_data, decimal_pos=DECIMAL_POS)
+
         day_box_plot = alt.Chart(df_day_data).mark_boxplot(outliers=False).encode(
             x=alt.X(file.TIME_LABEL, title=TIME_LABEL),
             y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
-            color=alt.Color('day:N', sort=False)
+            color=alt.Color('day:N', sort=False, title="Day"),
         )
         day_plot = [day_box_plot]
     return (day_plot,)
@@ -245,6 +256,7 @@ def _(dates, mo, tab_box_plot_label, tab_line_label):
 
 @app.cell
 def _(
+    DECIMAL_POS,
     POINT_SIZE,
     PRICE_LABEL,
     TIME_LABEL,
@@ -265,6 +277,7 @@ def _(
 
     df_avg_values = df_total_avg_data.groupby(file.TIME_LABEL)[file.VALUE_LABEL].mean()
     df_avg_values = df_avg_values.reset_index()
+    df_avg_values = file.clean_dataframe(df_avg_values, decimal_pos=DECIMAL_POS)
 
     total_line_plot = alt.Chart(df_avg_values).transform_calculate(
             Legend="'Total average'",
@@ -279,7 +292,6 @@ def _(
             )
     date_range_plot.append(total_line_plot)
 
-
     # get range data
     date_range_data = file.get_date_range_data(data, dates, str(date_selection.value[0]), str(date_selection.value[1]))
     df_date_range = file.get_dataframe(date_range_data)
@@ -288,16 +300,18 @@ def _(
     if date_range_tab.value == tab_line_label:
         df_date_range = df_date_range.groupby(file.TIME_LABEL)[file.VALUE_LABEL].mean()
         df_date_range = df_date_range.reset_index()
+        df_date_range = file.clean_dataframe(df_date_range, decimal_pos=DECIMAL_POS)
 
-
+        # avg. line
         date_range_line_plot = alt.Chart(df_date_range).mark_line().encode(
             x=alt.X(file.TIME_LABEL, sort=False),
             y=alt.Y(file.VALUE_LABEL, PRICE_LABEL)
         )
         date_range_plot.append(date_range_line_plot)
 
+        # points
         date_range_point_plot = alt.Chart(df_date_range).mark_point(size=POINT_SIZE).encode(
-            x=alt.X(file.TIME_LABEL, sort=False),
+            x=alt.X(file.TIME_LABEL, sort=False, title=TIME_LABEL),
             y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
             tooltip=[
                 alt.Tooltip(file.TIME_LABEL, title=TIME_LABEL),
@@ -309,12 +323,13 @@ def _(
 
     # box plot
     if date_range_tab.value == tab_box_plot_label:
+        df_date_range = file.clean_dataframe(df_date_range, decimal_pos=DECIMAL_POS)
+
         date_range_box_plot = alt.Chart(df_date_range).mark_boxplot(outliers=False).encode(
-            x=alt.X(file.TIME_LABEL, sort=False),
-            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL)
+            x=alt.X(file.TIME_LABEL, sort=False, title=TIME_LABEL),
+            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
         )
         date_range_plot.append(date_range_box_plot)
-
 
     alt.layer(*date_range_plot)
     return
