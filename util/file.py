@@ -5,7 +5,7 @@ import numpy as np
 import util.time as time
 
 DATE_LABEL = "date"
-TIME_LABEL = "TIME"
+TIME_LABEL = "time"
 TIME_ZONE_LABEL = "time_zone"
 DATA_VALUE_LABEL = "value"
 
@@ -17,7 +17,10 @@ VALUE_LABEL = "value"
 LABEL_LABEL = "label"
 
 TIMEZONE_OFFSET = 6
+
+DATE_SEPARATOR = '-'
 YEAR_POS = 4
+MONTH_POS = 2
 DAY_POS = 2
 
 DAYS_IN_A_WEEK = 7
@@ -95,31 +98,18 @@ def get_dataframe(data: dict):
 
 
 # --------------------------------------------------
-def get_avg_month_values(data: list, dates: list, year: str) -> list:
-    assert len(year) == YEAR_POS, f"[!] Invalid year: {year}"
-
+def get_date_range_data(data: list, dates: list, date_start: str, date_end: str) -> list:
     # format: yyyy-mm-dd
     # create a list with all month labels -> drop dates
-    month_labels = [{PRICE_LABEL: date[:-DAY_POS]} for date in dates if year in date]
-    df_month_labels = pd.DataFrame(month_labels)[PRICE_LABEL].unique()
 
-    month_values = []
+    day_dates = [date for date in dates if date >= date_start and date <= date_end]
 
-    for month in df_month_labels:
-        month_dates = [date for date in dates if month in date]
-
-        month_data = get_filtered_data(data, month_dates)
-        month_results = get_price_data(month_data)
-
-        month_avg = [np.mean(price) for price in month_results[PRICE_LABEL]]
-        month_values.append(round(np.mean(month_avg), 4))
-    return month_values
+    day_data = get_filtered_data(data, day_dates)
+    return day_data
 
 
-def get_avg_hour_values(data: list, dates: list, day_indicies: list) -> dict:
+def get_day_data(data: list, dates: list, day_indicies: list) -> list:
     day_dates = [date for i, date in enumerate(dates) if i % DAYS_IN_A_WEEK in day_indicies]
     day_data = get_filtered_data(data, day_dates)
-    day_results = get_price_data(day_data)
 
-    day_avg = [np.mean(price) for price in day_results[PRICE_LABEL]]
-    return {VALUE_LABEL: day_avg, LABEL_LABEL: day_results[LABEL_LABEL]}
+    return day_data
