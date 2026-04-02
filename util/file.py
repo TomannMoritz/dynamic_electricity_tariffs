@@ -1,90 +1,102 @@
-import json
 import pandas as pd
+import datetime as dt
 
-DATE_LABEL = "date"
-TIME_LABEL = "time"
-TIME_ZONE_LABEL = "time_zone"
-VALUE_LABEL = "value"
+import util.general as gen
 
-TIMEZONE_OFFSET = 6
 
-TIME_START_LABEL = "startsAt"
-TOTAL_PRICE_LABEL = "total"
+WEEKDAY_LABEL = "WeekDay"
+_WEEKDAY_LABEL = "_WeekDay"
+
+DATE_LABEL = "Date"
+TIME_START_LABEL = "TimeStart"
+TIME_END_LABEL = "TimeEnd"
+TIME_ZONE_LABEL = "TimeZone"
+VALUE_LABEL = "Value"
+
+EXPECTED_COLUMN_LABELS = [
+        DATE_LABEL,
+        TIME_START_LABEL,
+        TIME_END_LABEL,
+        TIME_ZONE_LABEL,
+        VALUE_LABEL
+        ]
+
+DATE_YEAR = "Year"
+DATE_MONTH = "Month"
+DATE_DAY = "Day"
+
+DAY_OFFSET = 0
+DAY_LEN = 2
+
+MONTH_OFFSET = DAY_OFFSET + DAY_LEN + 1
+MONTH_LEN = 2
+
+YEAR_OFFSET = MONTH_OFFSET + MONTH_LEN + 1
+YEAR_LEN = 4
 
 DAYS_IN_A_WEEK = 7
+CSV_SEPERATOR = ';'
 
 
 def prepare_data(file_path: str):
-    data = []
-    dates = []
+    # convert csv file into pandas dataframe
+    data = pd.read_csv(file_path, sep=CSV_SEPERATOR)
 
-    with open(file_path, 'r') as f_in:
-        for row in f_in:
-            json_row = json.loads(row)
-            key = next(iter(json_row.keys()))
-            dates.append(key)
+    # check column names
+    data_labels = data.columns.tolist()
 
-            # collect energy prices for each day
-            day_data = json_row[key]
-            for values in day_data:
-                time_value = values[TIME_START_LABEL].replace(key, "")
-                value = values[TOTAL_PRICE_LABEL]
+    invalid_size = len(EXPECTED_COLUMN_LABELS) != len(data_labels)
+    if invalid_size:
+        return None, None
 
-                data.append({
-                    DATE_LABEL: key,
-                    TIME_LABEL: time_value[1:-TIMEZONE_OFFSET],
-                    TIME_ZONE_LABEL: time_value[-TIMEZONE_OFFSET:],
-                    VALUE_LABEL: value,
-                })
+    for i, label in enumerate(EXPECTED_COLUMN_LABELS):
+        found_label = data_labels[i]
+        different_label = label != found_label
+
+        if different_label:
+            print(f"[!] Different label:\n\tFound: {found_label} \t Expected: {label}")
+            return None, None
+
+    data[DATE_DAY] = data[DATE_LABEL].str[DAY_OFFSET:DAY_OFFSET + DAY_LEN]
+    data[DATE_MONTH] = data[DATE_LABEL].str[MONTH_OFFSET:MONTH_OFFSET + MONTH_LEN]
+    data[DATE_YEAR] = data[DATE_LABEL].str[YEAR_OFFSET:YEAR_OFFSET + YEAR_LEN]
+
+    # add week day indicies
+    data = add_week_days(data)
+
+    data[DATE_LABEL] = data[DATE_YEAR] + "-" + data[DATE_MONTH] + "-" + data[DATE_DAY]
+    data[DATE_MONTH] = data[DATE_MONTH].astype(int)
+    data[DATE_MONTH] = data[DATE_MONTH].apply(lambda x: gen.MONTH_LABELS[x - 1])
+
+    # convert datatypes
+    data = convert_columntype_to_float(data, VALUE_LABEL)
+    data = get_date_time_df(data, TIME_START_LABEL)
+
+    # filter dates
+    dates = data[DATE_LABEL].unique()
     return data, dates
 
 
-def get_filtered_data(data: list, filtered_dates: list) -> list:
-    return [row for row in data if row[DATE_LABEL] in filtered_dates]
-
-
-def dict_to_dataframe(data: dict):
-    keys = data.keys()
-    assert len(data) > 0, f"[!] Invalid dictionary: {data}"
-    assert all([type(data[key]) is list for key in keys]), f"[!] Invalid types!"
-
-    array_len = len(data[next(iter(keys))])
-    assert all([len(data[key]) == array_len for key in keys]), f"[!] Lengths does not match!"
-
-    result = []
-    for i in range(array_len):
-        row = {}
-        for key in keys:
-            row[key] = data[key][i]
-        result.append(row)
-    return pd.DataFrame(result)
-
-
-def get_dataframe(data: dict):
-    return pd.DataFrame(data)
-
-
-def clean_dataframe(df, value_label=VALUE_LABEL, time_label=TIME_LABEL, decimal_pos=3):
-    df[value_label] = df[value_label].round(decimal_pos)
-
-    # format: HH:MM
-    df[time_label] = df[time_label].apply(lambda x: str(x)[:5])
+def convert_columntype_to_float(df: pd.DataFrame, column_name: str):
+    df[column_name] = df[column_name].str.replace(',', '.')
+    df[column_name] = df[column_name].astype(float)
     return df
 
 
-# --------------------------------------------------
-def get_date_range_data(data: list, dates: list, date_start: str, date_end: str) -> list:
-    # format: yyyy-mm-dd
-    # create a list with all month labels -> drop dates
+def add_week_days(df: pd.DataFrame) -> pd.DataFrame:
+    df[_WEEKDAY_LABEL] = df.apply(
+            lambda x: (dt.datetime(
+                int(x[DATE_YEAR]),
+                int(x[DATE_MONTH]),
+                int(x[DATE_DAY])
+                ).weekday() - 1) % 7, axis=1)
 
-    day_dates = [date for date in dates if date >= date_start and date <= date_end]
+    df[WEEKDAY_LABEL] = df.apply(
+            lambda x: gen.DAY_LABELS[x[_WEEKDAY_LABEL]], axis=1)
 
-    day_data = get_filtered_data(data, day_dates)
-    return day_data
+    return df
 
 
-def get_day_data(data: list, dates: list, day_indicies: list) -> list:
-    day_dates = [date for i, date in enumerate(dates) if i % DAYS_IN_A_WEEK in day_indicies]
-    day_data = get_filtered_data(data, day_dates)
-
-    return day_data
+def get_date_time_df(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+    df[column_name] = pd.to_datetime(df[column_name])
+    return df
