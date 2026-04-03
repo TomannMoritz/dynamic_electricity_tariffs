@@ -31,180 +31,181 @@ def _(file, mo):
 
 
 @app.cell
-def _(data, file, mo):
+def _(alt):
     PRICE_LABEL = "Price"
     MONTH_LABEL = "Month"
     TIME_LABEL = "Time"
+    YEAR_LABEL = "Year"
+    DAY_LABEL = "Day"
 
     # Settings
-    DECIMAL_POS = 2
+    DECIMAL_FORMAT = ".2f"
     POINT_SIZE = 100
 
+    COLOR_SCHEME = {'scheme': 'spectral'}
+    HOUR_FORMAT = alt.Axis(format='%H:%M', tickCount='hour')
 
-    # ui elements
-    year_list = data[file.DATE_YEAR].unique().tolist()
-    year_selection = mo.ui.dropdown(options=year_list, value=year_list[0], label="Select year: ")
 
     tab_line_label = "Avg price"
     tab_box_plot_label = "Box plot"
-    year_tab = mo.ui.tabs({
-        tab_line_label: "",
-        tab_box_plot_label: ""
-    })
+    tab_bar_plot_label = "Stacked bar plot"
     return (
-        DECIMAL_POS,
+        COLOR_SCHEME,
+        DAY_LABEL,
+        DECIMAL_FORMAT,
+        HOUR_FORMAT,
         MONTH_LABEL,
         POINT_SIZE,
         PRICE_LABEL,
         TIME_LABEL,
+        YEAR_LABEL,
+        tab_bar_plot_label,
         tab_box_plot_label,
         tab_line_label,
-        year_selection,
-        year_tab,
     )
 
 
 @app.cell
 def _(
-    DECIMAL_POS,
+    COLOR_SCHEME,
+    DECIMAL_FORMAT,
     MONTH_LABEL,
-    POINT_SIZE,
     PRICE_LABEL,
+    YEAR_LABEL,
     alt,
     data,
-    dates,
     file,
     gen,
     mo,
-    tab_box_plot_label,
-    tab_line_label,
-    year_selection,
-    year_tab,
 ):
-    year_month_values = data[[file.DATE_YEAR, file.DATE_MONTH, file.VALUE_LABEL]]
-    year_month_values = data[(data[file.DATE_YEAR] == year_selection.value)]
-    month_groupby = year_month_values.groupby(by=[file.DATE_YEAR, file.DATE_MONTH])[file.VALUE_LABEL]
+    year_month_data = data[[file.DATE_YEAR, file.DATE_MONTH, file.VALUE_LABEL]]
+    df_year_month = year_month_data.groupby(by=[file.DATE_YEAR, file.DATE_MONTH])[file.VALUE_LABEL].mean()
+    df_year_month = df_year_month.reset_index()
 
-    year_plot = []
+    # NOTE: Assumption that dates are in order (and without gaps)
+    # title with first and last date
+    year_month_title = f"Average monthly tariffs: {data[file.DATE_LABEL][0]} - {data[file.DATE_LABEL][len(data[file.DATE_LABEL]) - 1]}"
 
-    # line plot
-    if year_tab.value == tab_line_label:
-        df_months = month_groupby.mean()
-        df_months = df_months.reset_index()
-        df_months[file.VALUE_LABEL] = df_months[file.VALUE_LABEL].round(DECIMAL_POS)
-
-        # average line
-        year_line_plot = alt.Chart(df_months).mark_line().encode(
-            x=alt.X(file.DATE_MONTH, sort=False, title=MONTH_LABEL),
-            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL)
-        )
-        year_plot.append(year_line_plot)
-
-        # points with tooltip
-        year_points = alt.Chart(df_months).mark_point(
-            size=POINT_SIZE,
-            filled=True
-        ).encode(
-            x=alt.X(file.DATE_MONTH, sort=None, title=MONTH_LABEL),
-            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
-            tooltip=[
-                alt.Tooltip(file.DATE_MONTH, title=MONTH_LABEL),
-                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL)
-            ]
-        )
-        year_plot.append(year_points)
-
-
-    # box plot
-    if year_tab.value == tab_box_plot_label:
-        year_box_plot = alt.Chart(year_month_values).mark_boxplot(outliers=False).encode(
-            x=alt.X(file.DATE_MONTH, sort=False, title=MONTH_LABEL),
-            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL)
-        )
-        year_plot.append(year_box_plot)
+    # average line
+    year_month_plot = alt.Chart(df_year_month, title=year_month_title).mark_bar().encode(
+        x=alt.X(file.DATE_MONTH, title=MONTH_LABEL, sort=gen.MONTH_LABELS),
+        y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL, stack=True),
+        order=alt.Order(file.DATE_YEAR, sort="ascending"),
+        tooltip=[
+            alt.Tooltip(file.DATE_YEAR, title=YEAR_LABEL),
+            alt.Tooltip(file.DATE_MONTH, title=MONTH_LABEL),
+            alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL, format=DECIMAL_FORMAT)
+        ],
+        color=alt.Color(file.DATE_YEAR, title=YEAR_LABEL, scale=COLOR_SCHEME, sort="descending"),
+    )
 
 
     mo.vstack([
-        mo.md(f"## Average monthly tariffs: {gen.show_date(dates[0])} - {gen.show_date(dates[-1])}"),
-        year_selection,
-        year_tab,
-        alt.layer(*year_plot)
+        mo.md("## " + year_month_title),
+        year_month_plot
     ])
     return
 
 
 @app.cell
-def _(dates, gen, mo, tab_box_plot_label, tab_line_label):
+def _(dates, gen, mo, tab_bar_plot_label, tab_line_label):
     day_selection = mo.ui.multiselect(options=gen.DAY_LABELS, value=gen.DAY_LABELS, label="Select days: ")
+    day_date_range = mo.ui.date_range(start=dates[0], stop=dates[-1])
     day_tabs = mo.ui.tabs({
         tab_line_label: "",
-        tab_box_plot_label: ""
+        tab_bar_plot_label: ""
     })
 
     mo.vstack([
-        mo.md(f"## Average hourly tariffs: {gen.show_date(dates[0])} - {gen.show_date(dates[-1])}"),
+        mo.md(f"## Average hourly tariffs per day: {gen.show_date(dates[0])} - {gen.show_date(dates[-1])}"),
         day_selection,
+        day_date_range,
         day_tabs
     ])
-    return day_selection, day_tabs
+    return day_date_range, day_selection, day_tabs
 
 
 @app.cell
 def _(
+    COLOR_SCHEME,
+    DAY_LABEL,
+    DECIMAL_FORMAT,
+    HOUR_FORMAT,
     POINT_SIZE,
     PRICE_LABEL,
     TIME_LABEL,
+    YEAR_LABEL,
     alt,
     data,
+    day_date_range,
     day_selection,
     day_tabs,
     file,
-    tab_box_plot_label,
+    gen,
+    tab_bar_plot_label,
     tab_line_label,
 ):
     day_plot = []
 
     day_hourly_data = data[data[file.WEEKDAY_LABEL].isin(day_selection.value)]
 
-    df_day_groupby = day_hourly_data[[file._WEEKDAY_LABEL, file.WEEKDAY_LABEL, file.TIME_START_LABEL, file.VALUE_LABEL]].groupby(by=[file._WEEKDAY_LABEL, file.WEEKDAY_LABEL, file.TIME_START_LABEL])[file.VALUE_LABEL]
+    day_start, day_end = day_date_range.value
+    day_start = str(day_start)
+    day_end = str(day_end)
+
+    # filter data
+    day_title = f"Average hourly tariffs per day: {day_start} - {day_end}"
+    day_hourly_data = day_hourly_data[day_hourly_data[file.DATE_LABEL] >= day_start]
+    day_hourly_data = day_hourly_data[day_hourly_data[file.DATE_LABEL] <= day_end]
+
+    df_day_hourly_group = day_hourly_data.groupby(by=[file._WEEKDAY_LABEL, file.WEEKDAY_LABEL, file.TIME_START_LABEL])[file.VALUE_LABEL]
 
 
     # avg line plot
     if day_tabs.value == tab_line_label:
-        df_day_data = df_day_groupby.mean()
-        df_day_data = df_day_data.reset_index()
+        df_day_hour = df_day_hourly_group.mean()
+        df_day_hour = df_day_hour.reset_index()
 
         # create plots
-        day_lines = alt.Chart(df_day_data).mark_line().encode(
+        day_lines = alt.Chart(df_day_hour, title=day_title).mark_line().encode(
             x=alt.X(field=file.TIME_START_LABEL, type="temporal", title=TIME_LABEL),
             y=alt.Y(field=file.VALUE_LABEL, type="quantitative", title=PRICE_LABEL),
             color=alt.Color(file.WEEKDAY_LABEL, sort=False)
         )
 
 
-        day_points = alt.Chart(df_day_data).mark_point(size=POINT_SIZE/2).encode(
-            x=alt.X(field=file.TIME_START_LABEL, type="temporal", title=TIME_LABEL, axis=alt.Axis(format='%H:%M', tickCount='hour')),
+        day_points = alt.Chart(df_day_hour).mark_point(size=POINT_SIZE/2).encode(
+            x=alt.X(field=file.TIME_START_LABEL, type="temporal", title=TIME_LABEL, axis=HOUR_FORMAT),
             y=alt.Y(field=file.VALUE_LABEL, type="quantitative", title=PRICE_LABEL),
             color=alt.Color(field=file.WEEKDAY_LABEL, sort=False),
             tooltip=[
-                alt.Tooltip(field=file.WEEKDAY_LABEL, title="Day"),
-                alt.Tooltip(filed=file.TIME_START_LABEL, title=TIME_LABEL, axis=alt.Axis(format='%H:%M', tickCount='hour')),
-                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL, format=".2f")
+                alt.Tooltip(file.WEEKDAY_LABEL, title=DAY_LABEL),
+                alt.Tooltip(file.TIME_START_LABEL, title=TIME_LABEL, type="temporal", axis=HOUR_FORMAT),
+                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL, format=DECIMAL_FORMAT)
             ]
         )
 
         day_plot = [day_lines, day_points]
 
 
-    # box plot
-    if day_tabs.value == tab_box_plot_label:
-        day_box_plot = alt.Chart(day_hourly_data).mark_boxplot(outliers=False).encode(
-            x=alt.X(file.TIME_START_LABEL, title=TIME_LABEL),
-            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
-            color=alt.Color(file.WEEKDAY_LABEL, sort=False, title="Day"),
+    # stacked bar plot
+    if day_tabs.value == tab_bar_plot_label:
+        df_day_hour = df_day_hourly_group.mean()
+        df_day_hour = df_day_hour.reset_index()
+
+        day_bar_plot = alt.Chart(df_day_hour, title=day_title).mark_bar().encode(
+            x=alt.X(file.TIME_START_LABEL, title=TIME_LABEL, type="temporal", axis=HOUR_FORMAT),
+            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL, stack=True),
+            order=alt.Order(file._WEEKDAY_LABEL, sort="descending"),
+            tooltip=[
+                alt.Tooltip(file.WEEKDAY_LABEL, title=YEAR_LABEL),
+                alt.Tooltip(file.TIME_START_LABEL, title=TIME_LABEL, type="temporal", axis=HOUR_FORMAT),
+                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL, format=DECIMAL_FORMAT)
+            ],
+            color=alt.Color(file.WEEKDAY_LABEL, title=DAY_LABEL, scale=COLOR_SCHEME, sort=gen.DAY_LABELS),
         )
 
-        day_plot = [day_box_plot]
+        day_plot = [day_bar_plot]
 
 
     alt.layer(*day_plot)
@@ -230,6 +231,8 @@ def _(dates, mo, tab_box_plot_label, tab_line_label):
 
 @app.cell
 def _(
+    DECIMAL_FORMAT,
+    HOUR_FORMAT,
     POINT_SIZE,
     PRICE_LABEL,
     TIME_LABEL,
@@ -244,14 +247,14 @@ def _(
     date_range_plot = []
 
     # total average
-    total_hourly_data = data[[file.TIME_START_LABEL, file.VALUE_LABEL]].groupby(by=[file.TIME_START_LABEL])[file.VALUE_LABEL].mean()
-    total_hourly_data = total_hourly_data.reset_index()
+    legend_info = f"'{date_selection.start} - {date_selection.stop}'"
 
+    df_total_hourly = data[[file.TIME_START_LABEL, file.VALUE_LABEL]].groupby(by=[file.TIME_START_LABEL])[file.VALUE_LABEL].mean()
+    df_total_hourly = df_total_hourly.reset_index()
 
-    total_line_plot = alt.Chart(total_hourly_data).transform_calculate(
-            Legend="'Total average'",
-        ).mark_line(strokeDash=[4,4]).encode(
-            x=alt.X(file.TIME_START_LABEL, title=TIME_LABEL), 
+    # line plot
+    total_hour_plot = alt.Chart(df_total_hourly).transform_calculate(Legend=legend_info).mark_line(strokeDash=[4,4]).encode(
+            x=alt.X(file.TIME_START_LABEL, title=TIME_LABEL),
             y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
             color = alt.Color("Legend:N",
                 scale=alt.Scale(
@@ -259,39 +262,42 @@ def _(
                     )
                 )
             )
-    date_range_plot.append(total_line_plot)
+    date_range_plot.append(total_hour_plot)
 
 
     # range values
     start_date, stop_date = date_selection.value
     start_date = str(start_date)
     stop_date = str(stop_date)
+    range_legend = f"'{start_date} - {stop_date}'"
 
-    df_range_hourly = data[data["Date"] >= start_date]
-    df_range_hourly = df_range_hourly[df_range_hourly["Date"] <= stop_date]
+    # filter date range
+    range_hour_title = f"Average hourly tariffs"
+    range_hour_data = data[data[file.DATE_LABEL] >= start_date]
+    range_hour_data = range_hour_data[range_hour_data[file.DATE_LABEL] <= stop_date]
 
-    df_range_hourly_groupby = df_range_hourly[[file.TIME_START_LABEL, file.VALUE_LABEL]].groupby(by=[file.TIME_START_LABEL])[file.VALUE_LABEL]
+    range_hour_group = range_hour_data[[file.TIME_START_LABEL, file.VALUE_LABEL]].groupby(by=[file.TIME_START_LABEL])[file.VALUE_LABEL]
 
 
     # line plot
     if date_range_tab.value == tab_line_label:
-        df_date_range = df_range_hourly_groupby.mean()
-        df_date_range = df_date_range.reset_index()
+        df_range_hour = range_hour_group.mean()
+        df_range_hour = df_range_hour.reset_index()
 
         # avg. line
-        date_range_line_plot = alt.Chart(df_date_range).mark_line().encode(
+        date_range_line_plot = alt.Chart(df_range_hour, title=range_hour_title).mark_line().encode(
             x=alt.X(file.TIME_START_LABEL, sort=False),
             y=alt.Y(file.VALUE_LABEL, PRICE_LABEL)
         )
         date_range_plot.append(date_range_line_plot)
 
         # points
-        date_range_point_plot = alt.Chart(df_date_range).mark_point(size=POINT_SIZE).encode(
-            x=alt.X(file.TIME_START_LABEL, sort=False, title=TIME_LABEL, axis=alt.Axis(format='%H:%M', tickCount='hour')),
+        date_range_point_plot = alt.Chart(df_range_hour).mark_point(size=POINT_SIZE).encode(
+            x=alt.X(file.TIME_START_LABEL, sort=False, title=TIME_LABEL, axis=HOUR_FORMAT),
             y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
             tooltip=[
-                alt.Tooltip(file.TIME_START_LABEL, title=TIME_LABEL, axis=alt.Axis(format='%H:%M', tickCount='hour')),
-                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL, format=".2f")
+                alt.Tooltip(file.TIME_START_LABEL, title=TIME_LABEL, axis=HOUR_FORMAT),
+                alt.Tooltip(file.VALUE_LABEL, title=PRICE_LABEL, format=DECIMAL_FORMAT)
             ]
         )
         date_range_plot.append(date_range_point_plot)
@@ -299,10 +305,11 @@ def _(
 
     # box plot
     if date_range_tab.value == tab_box_plot_label:
-        date_range_box_plot = alt.Chart(data).mark_boxplot(outliers=False).encode(
-            x=alt.X(file.TIME_START_LABEL, sort=False, title=TIME_LABEL, axis=alt.Axis(format='%H:%M', tickCount='hour')),
-            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL)
+        date_range_box_plot = alt.Chart(range_hour_data, title=range_hour_title).transform_calculate(Legend=range_legend).mark_boxplot(outliers=False).encode(
+            x=alt.X(file.TIME_START_LABEL, sort=False, title=TIME_LABEL, axis=HOUR_FORMAT),
+            y=alt.Y(file.VALUE_LABEL, title=PRICE_LABEL),
         )
+
         date_range_plot.append(date_range_box_plot)
 
 
