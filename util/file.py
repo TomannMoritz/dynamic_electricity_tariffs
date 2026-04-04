@@ -70,7 +70,6 @@ def prepare_data(file_path: str):
 
     # convert datatypes
     data = convert_columntype_to_float(data, VALUE_LABEL)
-    data = get_date_time_df(data, TIME_START_LABEL)
 
     # filter dates
     dates = data[DATE_LABEL].unique()
@@ -94,9 +93,4 @@ def add_week_days(df: pd.DataFrame) -> pd.DataFrame:
     df[WEEKDAY_LABEL] = df.apply(
             lambda x: gen.DAY_LABELS[x[_WEEKDAY_LABEL]], axis=1)
 
-    return df
-
-
-def get_date_time_df(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
-    df[column_name] = pd.to_datetime(df[column_name])
     return df
